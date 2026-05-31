@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:flutter_unity_widget/flutter_unity_widget.dart';
 
 import '../../core/app_colors.dart';
 import '../../widgets/primary_button.dart';
@@ -23,6 +23,7 @@ class _ConversationPageState extends State<ConversationPage> {
   TranslateMode _mode = TranslateMode.signToText;
 
   final TextEditingController _guideController = TextEditingController();
+  final GlobalKey<_TextToSignViewState> _unityKey = GlobalKey<_TextToSignViewState>();
 
   final List<String> _samples = const [
     '안녕하세요. 어디가 불편하세요?',
@@ -57,9 +58,14 @@ class _ConversationPageState extends State<ConversationPage> {
 
   void _generateSign() {
     final text = _guideController.text.trim();
+    if (text.isEmpty) return;
+
     setState(() {
-      _generatedText = text.isEmpty ? '입력된 문장이 없습니다.' : text;
+      _generatedText = text;
     });
+
+    String dummyJson = '{"action": "play", "text": "$text"}';
+    _unityKey.currentState?.sendDataToUnity(dummyJson);
   }
 
   @override
@@ -76,35 +82,21 @@ class _ConversationPageState extends State<ConversationPage> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.04, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
-            child: _mode == TranslateMode.signToText
-                ? _SignToTextView(
-              key: const ValueKey('signToText'),
-              modeSwitcher: modeSwitcher,
-              recognizedText: _recognizedText,
-            )
-                : _TextToSignView(
-              key: const ValueKey('textToSign'),
-              modeSwitcher: modeSwitcher,
-              controller: _guideController,
-              generatedText: _generatedText,
-              onGenerate: _generateSign,
-            ),
+          child: IndexedStack(
+            index: _mode == TranslateMode.signToText ? 0 : 1,
+            children: [
+              _SignToTextView(
+                modeSwitcher: modeSwitcher,
+                recognizedText: _recognizedText,
+              ),
+              _TextToSignView(
+                key: _unityKey,
+                modeSwitcher: modeSwitcher,
+                controller: _guideController,
+                generatedText: _generatedText,
+                onGenerate: _generateSign,
+              ),
+            ],
           ),
         ),
       ),
@@ -337,7 +329,7 @@ class _SignToTextView extends StatelessWidget {
 // ----------------------------------------------------
 // 🌟 한국어 -> 수어 화면 (아바타/입력)
 // ----------------------------------------------------
-class _TextToSignView extends StatelessWidget {
+class _TextToSignView extends StatefulWidget {
   const _TextToSignView({
     super.key,
     required this.modeSwitcher,
@@ -352,6 +344,31 @@ class _TextToSignView extends StatelessWidget {
   final VoidCallback onGenerate;
 
   @override
+  State<_TextToSignView> createState() => _TextToSignViewState();
+}
+
+class _TextToSignViewState extends State<_TextToSignView> {
+  UnityWidgetController? _unityWidgetController;
+
+  void onUnityCreated(UnityWidgetController controller) {
+    _unityWidgetController = controller;
+  }
+
+  void sendDataToUnity(String jsonData) {
+    _unityWidgetController?.postMessage(
+      'AvatarModel',
+      'PlaySignLanguage',
+      jsonData,
+    );
+  }
+
+  @override
+  void dispose() {
+    _unityWidgetController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final avatarWithOverlays = ClipRRect(
       borderRadius: BorderRadius.circular(22),
@@ -360,23 +377,14 @@ class _TextToSignView extends StatelessWidget {
           Container(
             width: double.infinity,
             height: double.infinity,
-            color: Colors.black87,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Text(
-                  generatedText,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    height: 1.5,
-                  ),
-                ),
-              ),
+            color: Colors.grey[200],
+            child: UnityWidget(
+              onUnityCreated: onUnityCreated,
+              useAndroidViewSurface: true,
+              borderRadius: BorderRadius.circular(22),
             ),
           ),
+
           Positioned(
             top: 16,
             left: 16,
@@ -394,7 +402,7 @@ class _TextToSignView extends StatelessWidget {
             right: 16,
             child: SizedBox(
               width: 140,
-              child: modeSwitcher,
+              child: widget.modeSwitcher,
             ),
           ),
         ],
@@ -442,7 +450,7 @@ class _TextToSignView extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: controller,
+                    controller: widget.controller,
                     maxLines: 1,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.text),
                     decoration: InputDecoration(
@@ -469,7 +477,7 @@ class _TextToSignView extends StatelessWidget {
                   width: 90,
                   child: PrimaryButton(
                     text: '변환',
-                    onPressed: onGenerate,
+                    onPressed: widget.onGenerate,
                   ),
                 ),
               ],
@@ -490,7 +498,7 @@ class _TextToSignView extends StatelessWidget {
 }
 
 // ----------------------------------------------------
-// 🌟 실시간 카메라 위젯 (녹화 UI + 깜빡이는 REC 추가)
+// 🌟 실시간 카메라 위젯 (가벼워진 버전)
 // ----------------------------------------------------
 class LiveCameraView extends StatefulWidget {
   const LiveCameraView({super.key});
@@ -499,21 +507,12 @@ class LiveCameraView extends StatefulWidget {
   State<LiveCameraView> createState() => _LiveCameraViewState();
 }
 
-// 💡 애니메이션 처리를 위해 TickerProviderStateMixin을 추가합니다.
 class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProviderStateMixin {
   CameraController? _controller;
   bool _isCameraInitialized = false;
   String? _errorMessage;
 
-  final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
-  bool _isProcessing = false;
-  List<Pose> _poses = [];
-  Size? _imageSize;
-
   bool _isRecording = false;
-  List<List<Pose>> _recordedSession = [];
-
-  // 💡 'REC' 깜빡임 효과를 위한 컨트롤러
   late AnimationController _blinkController;
 
   @override
@@ -521,7 +520,6 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
     super.initState();
     _initCamera();
 
-    // 💡 0.8초 주기로 깜빡이는 애니메이션 설정
     _blinkController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -545,7 +543,6 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
         frontCamera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
       );
 
       await _controller!.initialize();
@@ -562,32 +559,6 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
         _isCameraInitialized = true;
       });
 
-      _controller!.startImageStream((CameraImage image) async {
-        if (_isProcessing) return;
-        _isProcessing = true;
-
-        try {
-          final inputImage = _inputImageFromCameraImage(image, frontCamera);
-          if (inputImage != null) {
-            final poses = await _poseDetector.processImage(inputImage);
-            if (mounted) {
-              setState(() {
-                _poses = poses;
-                _imageSize = Size(image.width.toDouble(), image.height.toDouble());
-              });
-
-              if (_isRecording) {
-                _recordedSession.add(poses);
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('관절 인식 오류: $e');
-        } finally {
-          _isProcessing = false;
-        }
-      });
-
     } catch (e) {
       setState(() => _errorMessage = '카메라 초기화 오류:\n$e');
     }
@@ -598,44 +569,19 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
       _isRecording = !_isRecording;
 
       if (_isRecording) {
-        _recordedSession.clear();
-        _blinkController.repeat(reverse: true); // 💡 녹화 시작 시 깜빡임 시작!
+        _blinkController.repeat(reverse: true);
         debugPrint('🟢 수어 녹화 시작!');
       } else {
-        _blinkController.stop(); // 💡 녹화 종료 시 깜빡임 정지
-        _blinkController.value = 1.0; // 숨김 처리 초기화
-        debugPrint('🔴 수어 녹화 종료! 총 ${_recordedSession.length} 프레임 수집됨.');
+        _blinkController.stop();
+        _blinkController.value = 1.0;
+        debugPrint('🔴 수어 녹화 종료!');
       }
     });
   }
 
-  InputImage? _inputImageFromCameraImage(CameraImage image, CameraDescription camera) {
-    final format = InputImageFormatValue.fromRawValue(image.format.raw) ??
-        (Platform.isAndroid ? InputImageFormat.nv21 : InputImageFormat.bgra8888);
-
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
-
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
-    }
-    final bytes = allBytes.done().buffer.asUint8List();
-
-    final metadata = InputImageMetadata(
-      size: Size(image.width.toDouble(), image.height.toDouble()),
-      rotation: rotation,
-      format: format,
-      bytesPerRow: image.planes[0].bytesPerRow,
-    );
-
-    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
-  }
-
   @override
   void dispose() {
-    _blinkController.dispose(); // 💡 메모리 누수 방지
-    _poseDetector.close();
-    _controller?.stopImageStream();
+    _blinkController.dispose();
     _controller?.dispose();
     super.dispose();
   }
@@ -663,12 +609,6 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
             children: [
               CameraPreview(_controller!),
 
-              if (_poses.isNotEmpty && _imageSize != null)
-                CustomPaint(
-                  painter: RealPosePainter(_poses, _imageSize!),
-                ),
-
-              // 💡 1. 녹화 중일 때 화면 전체에 붉은 테두리 효과
               if (_isRecording)
                 Container(
                   decoration: BoxDecoration(
@@ -676,7 +616,7 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
                   ),
                 ),
 
-              // 상단: 사람 인식 상태 표시 바
+              // 상단: 카메라 활성화 상태 표시 바
               Positioned(
                 top: 20,
                 left: 0,
@@ -685,18 +625,17 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: _poses.isNotEmpty ? Colors.green.withOpacity(0.8) : Colors.redAccent.withOpacity(0.8),
+                      color: Colors.green.withOpacity(0.8),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(
-                      _poses.isNotEmpty ? '👀 사람 인식 됨' : '🤔 화상 밖으로 벗어났습니다.',
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                    child: const Text(
+                      '📸 카메라 활성화 됨',
+                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
               ),
 
-              // 💡 2. 좌측 상단 깜빡이는 [🔴 REC] 표시
               if (_isRecording)
                 Positioned(
                   top: 25,
@@ -728,7 +667,6 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
                   ),
                 ),
 
-              // 하단: 녹화 시작/정지 버튼
               Positioned(
                 bottom: 30,
                 left: 0,
@@ -766,81 +704,4 @@ class _LiveCameraViewState extends State<LiveCameraView> with SingleTickerProvid
       ),
     );
   }
-}
-
-// ----------------------------------------------------
-// 🌟 눕는 뼈대 강제 기상! (수동 90도 회전 화가)
-// ----------------------------------------------------
-class RealPosePainter extends CustomPainter {
-  final List<Pose> poses;
-  final Size imageSize;
-
-  RealPosePainter(this.poses, this.imageSize);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (poses.isEmpty) return;
-
-    final paintLine = Paint()
-      ..color = Colors.greenAccent
-      ..strokeWidth = 4.0
-      ..style = PaintingStyle.stroke;
-
-    final paintPoint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    // AI 원본 사진의 가로/세로를 서로 바꾼 비율을 구합니다.
-    final double scaleX = size.width / imageSize.height;
-    final double scaleY = size.height / imageSize.width;
-
-    for (final pose in poses) {
-      Offset getPoint(PoseLandmark landmark) {
-        // 💡 1. 왼쪽으로 90도 누운 뼈대를 시계방향으로 90도 돌려서 일으켜 세웁니다!
-        double rotatedX = landmark.y;
-        double rotatedY = landmark.x;
-
-        // 💡 2. 화면 크기에 맞게 스케일링
-        double x = rotatedX * scaleX;
-        double y = rotatedY * scaleY;
-
-        // 💡 3. 전면 카메라 거울 모드 (좌우 반전)
-        // 🚨 만약 뼈대가 왼쪽/오른쪽 나랑 반대로(청개구리처럼) 움직이면 아래 줄 맨 앞에 // 를 붙여서 꺼주세요!
-        x = size.width - x;
-
-        return Offset(x, y);
-      }
-
-      // 점 찍기
-      pose.landmarks.forEach((_, landmark) {
-        if (landmark.likelihood > 0.5) {
-          canvas.drawCircle(getPoint(landmark), 5.0, paintPoint);
-        }
-      });
-
-      // 뼈대 선 긋기
-      void drawBone(PoseLandmarkType type1, PoseLandmarkType type2) {
-        final lm1 = pose.landmarks[type1];
-        final lm2 = pose.landmarks[type2];
-        if (lm1 != null && lm2 != null && lm1.likelihood > 0.5 && lm2.likelihood > 0.5) {
-          canvas.drawLine(getPoint(lm1), getPoint(lm2), paintLine);
-        }
-      }
-
-      // 얼굴
-      drawBone(PoseLandmarkType.leftEar, PoseLandmarkType.leftEye);
-      drawBone(PoseLandmarkType.leftEye, PoseLandmarkType.nose);
-      drawBone(PoseLandmarkType.nose, PoseLandmarkType.rightEye);
-      drawBone(PoseLandmarkType.rightEye, PoseLandmarkType.rightEar);
-      // 어깨, 팔
-      drawBone(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-      drawBone(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
-      drawBone(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
-      drawBone(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
-      drawBone(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant RealPosePainter oldDelegate) => true;
 }
