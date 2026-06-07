@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
+import 'auth_service.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/soft_card.dart';
 import '../../widgets/sudam_logo.dart';
@@ -29,7 +30,6 @@ class LoginPage extends StatelessWidget {
                   padding: EdgeInsets.all(wide ? 32 : 24),
                   child: Stack(
                     children: [
-                      // 상단 뒤로가기 버튼
                       Positioned(
                         top: 0,
                         left: 0,
@@ -51,33 +51,41 @@ class LoginPage extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      // 메인 콘텐츠 영역 (키보드 대응을 위한 스크롤뷰 포함)
                       Center(
                         child: SingleChildScrollView(
                           child: wide
                               ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              SizedBox(
-                                width: 360,
-                                child: _LoginBrandArea(),
-                              ),
-                              SizedBox(width: 88),
-                              SizedBox(
-                                width: 420,
-                                child: _LoginForm(),
-                              ),
-                            ],
-                          )
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(maxWidth: 360),
+                                          child: const _LoginBrandArea(),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 40),
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(maxWidth: 420),
+                                          child: const _LoginForm(),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
                               : const Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _LoginBrandArea(isMobile: true),
-                              SizedBox(height: 28),
-                              _LoginForm(),
-                            ],
-                          ),
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _LoginBrandArea(isMobile: true),
+                                    SizedBox(height: 28),
+                                    _LoginForm(),
+                                  ],
+                                ),
                         ),
                       ),
                     ],
@@ -108,8 +116,57 @@ class _LoginBrandArea extends StatelessWidget {
   }
 }
 
-class _LoginForm extends StatelessWidget {
+class _LoginForm extends StatefulWidget {
   const _LoginForm();
+
+  @override
+  State<_LoginForm> createState() => _LoginFormState();
+}
+
+class _LoginFormState extends State<_LoginForm> {
+  final TextEditingController _idController = TextEditingController();
+  final TextEditingController _pwController = TextEditingController();
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    _pwController.dispose();
+    super.dispose();
+  }
+
+  // 로그인 버튼을 눌렀을 때 실행될 함수
+  Future<void> _handleLogin() async {
+    final id = _idController.text.trim();
+    final pw = _pwController.text.trim();
+
+    if (id.isEmpty || pw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('아이디와 비밀번호를 모두 입력해주세요.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final success = await _authService.login(id, pw);
+
+    if (!mounted) return; // 비동기 작업 후 context 사용 전 필수 체크
+    setState(() => _isLoading = false); // 로딩 종료
+
+    if (success) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+          (route) => false,
+        );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -127,35 +184,30 @@ class _LoginForm extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        // 💡 핵심 수정: 이메일 ➔ 아이디로 변경
-        const TextField(
-          decoration: InputDecoration(
+        TextField(
+          controller: _idController,
+          decoration: const InputDecoration(
             labelText: '아이디',
             hintText: '아이디 입력',
           ),
         ),
         const SizedBox(height: 16),
-        const TextField(
+        TextField(
+          controller: _pwController,
           obscureText: true,
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             labelText: '비밀번호',
             hintText: '비밀번호 입력',
           ),
         ),
         const SizedBox(height: 22),
-        PrimaryButton(
-          text: '로그인하기',
-          onPressed: () {
-            // 시연용: 로그인 성공 시 홈화면으로 이동
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const HomePage(),
+        // 💡 로딩 중이면 인디케이터 표시, 아니면 버튼 표시
+        _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : PrimaryButton(
+                text: '로그인하기',
+                onPressed: _handleLogin, // 💡 함수 연결
               ),
-                  (route) => false,
-            );
-          },
-        ),
       ],
     );
   }

@@ -7,6 +7,7 @@ import '../../widgets/soft_card.dart';
 import '../account/account_page.dart';
 import '../conversation/conversation_page.dart';
 import '../glove/glove_page.dart';
+import '../calibration/gloveSelection_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -91,7 +92,7 @@ class HomePage extends StatelessWidget {
                           },
                         ),
                       ),
-                      const SizedBox(width: 24),
+                      const SizedBox(width: 12),
                       Expanded(
                         flex: 1,
                         child: _HomeActionCard(
@@ -106,6 +107,26 @@ class HomePage extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const GlovePage()),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 1,
+                        child: _HomeActionCard(
+                          title: '영점 조절',
+                          subtitle: '장갑 센서의 정밀도를 보정합니다.',
+                          icon: Icons.tune_rounded, // 영점 조절 아이콘
+                          accentColor: AppColors.softBlue,
+                          buttonText: '조절하기',
+                          onTap: () {
+                            // 💡 장갑 선택 페이지를 먼저 띄우거나, ID를 받아 넘겨야 합니다.
+                            // 여기서는 예시로 장갑 목록 페이지를 통해 선택하도록 유도하거나 
+                            // 직접 ID를 지정해서 이동합니다.
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const GloveSelectionPage()),
                             );
                           },
                         ),
@@ -131,6 +152,14 @@ class HomePage extends StatelessWidget {
                         icon: Icons.back_hand_rounded,
                         color: AppColors.softBlue,
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GlovePage())),
+                      ),
+                      const SizedBox(height: 16),
+                        _buildMobileCard( // 💡 추가됨
+                        context,
+                        title: '영점 조절',
+                        icon: Icons.tune_rounded,
+                        color: AppColors.softBlue,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GloveSelectionPage())),
                       ),
                     ],
                   ),
