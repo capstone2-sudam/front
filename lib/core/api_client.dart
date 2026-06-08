@@ -14,7 +14,7 @@ class ApiClient {
   ApiClient._internal() {
     // 1. 기본 옵션 설정 (Base URL, 타임아웃 등)
     dio = Dio(BaseOptions(
-      baseUrl: 'http://10.73.146.83:8000',
+      baseUrl: 'http://10.0.2.2:8000',
       connectTimeout: const Duration(seconds: 40),
       receiveTimeout: const Duration(minutes: 15),
     ));

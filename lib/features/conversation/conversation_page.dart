@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'conversation_service.dart';
-// import 'package:flutter_unity_widget/flutter_unity_widget.dart';
+import 'package:flutter_unity_widget/flutter_unity_widget.dart';
 
 import '../../core/app_colors.dart';
 import '../../widgets/primary_button.dart';
@@ -373,28 +373,24 @@ class _TextToSignView extends StatefulWidget {
 
 class _TextToSignViewState extends State<_TextToSignView> {
   // 🚧 [UNITY 연동 시 주석 해제 1]
-  // UnityWidgetController? _unityWidgetController;
+  UnityWidgetController? _unityWidgetController;
 
   // 💡 1. 유니티가 로드 완료되면 컨트롤러를 연결하는 함수
   void onUnityCreated(controller) {
     // 🚧 [UNITY 연동 시 주석 해제 2]
-    // _unityWidgetController = controller;
+    _unityWidgetController = controller;
+    debugPrint('🎮 [Unity] 유니티 위젯 최초 로드 및 초기화 완료');
   }
   
   // 💡 2. 부모 위젯(_generateSign)에서 호출할 수 있도록 public 메서드 생성
   void sendDataToUnity(String jsonString) {
-    // 🚧 [UNITY 연동 시 주석 해제 3]
-    /*
     if (_unityWidgetController != null) {
+      // 유니티 내부의 AvatarModel 오브젝트 안에 있는 PlaySignLanguage 함수를 호출하여 JSON 전달
       _unityWidgetController!.postMessage('AvatarModel', 'PlaySignLanguage', jsonString);
       debugPrint('➡️ [Flutter -> Unity] 데이터 전송 성공');
     } else {
       debugPrint('❌ [Flutter -> Unity] 유니티가 아직 로드되지 않았습니다.');
     }
-    */
-    
-    // 💡 현재는 테스트를 위해 콘솔에만 출력합니다.
-    debugPrint('➡️ [DEMO] 유니티로 데이터 전송 시뮬레이션 완료:\n$jsonString');
   }
 
   @override
@@ -403,40 +399,39 @@ class _TextToSignViewState extends State<_TextToSignView> {
       borderRadius: BorderRadius.circular(22),
       child: Stack(
         children: [
-          // 💡 4. 임시 회색 박스 내부에 JSON 데이터를 출력하도록 수정
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: Colors.grey[300],
-            padding: const EdgeInsets.only(top: 80, left: 16, right: 16, bottom: 16), // 뒤로가기 버튼을 가리지 않게 패딩
-            child: SingleChildScrollView(
-              child: Text( 
-                widget.unityDataToDisplay.isEmpty
-                    ? '이곳에 3D 아바타가\n표시될 예정입니다.'
-                    : widget.unityDataToDisplay, // 💡 값이 있으면 백엔드 JSON 그대로 출력
-                textAlign: widget.unityDataToDisplay.isEmpty ? TextAlign.center : TextAlign.left,
-                style: TextStyle(
-                  fontSize: widget.unityDataToDisplay.isEmpty ? 16 : 13,
-                  color: widget.unityDataToDisplay.isEmpty ? Colors.grey : Colors.black87,
-                  fontWeight: widget.unityDataToDisplay.isEmpty ? FontWeight.bold : FontWeight.w500,
-                  fontFamily: 'monospace', // 코드가 보기 편하게 모노스페이스 폰트 적용
-                ),
+          // 💡 [핵심 수정] 기존의 회색 박스와 Text 위젯을 완전히 제거하고 UnityWidget을 상시 배치합니다.
+          // 이로 인해 화면에 들어오자마자 유니티 개발자가 구워준(Baked) 첫 번째 씬이 즉시 화면에 출력됩니다.
+          Positioned.fill(
+            child: Container(
+              color: Colors.black, // 유니티 로딩 전 깜빡임을 방지하기 위해 어두운 배경 처리
+              child: UnityWidget(
+                onUnityCreated: onUnityCreated,
+                useAndroidViewSurface: false, // 안드로이드 성능 최적화 매개변수
+                borderRadius: const BorderRadius.all(Radius.circular(22)),
               ),
             ),
           ),
 
-          Positioned(
-            top: 16,
-            left: 16,
-            child: Material(
-              color: Colors.black.withOpacity(0.5),
-              shape: const CircleBorder(),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 26),
-                onPressed: () => Navigator.of(context).pop(),
+          // 💡 현재 상태(데이터 수신 중 등)를 유니티 화면 하단에 반투명하게 띄워주는 오버레이 자막 박스
+          if (widget.unityDataToDisplay.isNotEmpty && widget.unityDataToDisplay.contains("중..."))
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  widget.unityDataToDisplay,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-          ),
+            
           Positioned(
             top: 16,
             right: 16,
